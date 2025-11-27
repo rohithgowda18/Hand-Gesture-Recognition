@@ -133,3 +133,9 @@ dmypy.json
 .idea/
 
 .DS_Store
+
+# Saved drawings
+draw/assets/air_canvas_*.png
+
+# Virtual environment
+venv/

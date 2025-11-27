@@ -3,6 +3,7 @@
 """
 Multi-mode Hand Gesture Recognition and Air Canvas Application
 Combines gesture recognition with air canvas drawing functionality
+Enhanced with gesture-based clear (open palm) and save (close palm) in draw mode
 """
 
 import csv
@@ -330,7 +331,29 @@ def main():
         else:
             # ==================== AIR CANVAS MODE ====================
             if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
+                for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
+                    # Get handedness (Left or Right)
+                    hand_label = handedness.classification[0].label
+                    
+                    # Calculate gesture only for right hand
+                    if hand_label == "Right":
+                        landmark_list = calc_landmark_list(debug_image, hand_landmarks)
+                        pre_processed_landmark_list = pre_process_landmark(landmark_list)
+                        hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                        
+                        # hand_sign_id: 0=Open, 1=Close, 2=Pointer, 3=OK
+                        now = time.time()
+                        if hand_sign_id == 0 and (now - last_button_time > cooldown_time):  # Open palm = Clear
+                            color_points.clear()
+                            persistent_canvas.fill(255)
+                            print("Canvas cleared by open palm gesture")
+                            last_button_time = now
+                        elif hand_sign_id == 1 and (now - last_button_time > cooldown_time):  # Close palm = Save
+                            save_canvas(persistent_canvas)
+                            print("Canvas saved by close palm gesture")
+                            last_button_time = now
+                    
+                    # Drawing with index finger (all hands)
                     index_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
                     thumb_tip = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP]
                     x, y = int(index_tip.x * args.width), int(index_tip.y * args.height)
@@ -380,12 +403,32 @@ def main():
             # Set display to canvas and draw buttons on top
             debug_image = persistent_canvas.copy()
             if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
+                for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
+                    hand_label = handedness.classification[0].label
                     index_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
                     x, y = int(index_tip.x * args.width), int(index_tip.y * args.height)
                     smoothed_x = int(prev_x + smoothing * (x - prev_x))
                     smoothed_y = int(prev_y + smoothing * (y - prev_y))
                     cv.circle(debug_image, (smoothed_x, smoothed_y), 8, (0, 0, 0), -1)
+                    
+                    # Show gesture recognition for right hand
+                    if hand_label == "Right":
+                        landmark_list = calc_landmark_list(debug_image, hand_landmarks)
+                        pre_processed_landmark_list = pre_process_landmark(landmark_list)
+                        hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                        gesture_text = keypoint_classifier_labels[hand_sign_id]
+                        
+                        # Display current gesture
+                        cv.putText(debug_image, f"Right Hand: {gesture_text}", (10, 80),
+                                 cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                        
+                        # Show action hints
+                        if gesture_text == "Open":
+                            cv.putText(debug_image, "[OPEN PALM: CLEAR]", (10, 110),
+                                     cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
+                        elif gesture_text == "Close":
+                            cv.putText(debug_image, "[CLOSE PALM: SAVE]", (10, 110),
+                                     cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
             # Draw buttons AFTER canvas is set
             draw_canvas_buttons(debug_image, current_color, current_brush_size)
 
