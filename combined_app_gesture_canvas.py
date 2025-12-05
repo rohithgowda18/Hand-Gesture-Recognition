@@ -217,7 +217,7 @@ def main():
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(
         static_image_mode=args.use_static_image_mode,
-        max_num_hands=1,
+        max_num_hands=2,
         min_detection_confidence=args.min_detection_confidence,
         min_tracking_confidence=args.min_tracking_confidence,
     )
@@ -243,8 +243,19 @@ def main():
     drawing_enabled = False
     current_color = (0, 0, 255)
     current_brush_size = 2
+    # Preset color cycle (BGR)
+    color_cycle = [
+        (0, 0, 255),   # Red
+        (0, 255, 0),   # Green
+        (255, 0, 0),   # Blue
+        (0, 0, 0),     # Black
+        (255, 255, 0), # Cyan
+        (0, 255, 255), # Yellow
+    ]
+    color_index = 0
     color_points = defaultdict(lambda: deque(maxlen=deque_len))
     last_button_time = time.time()
+    left_last_action_time = time.time()
     cooldown_time = 0.5
     prev_x, prev_y = 0, 0
     smoothing = 0.3
@@ -331,59 +342,95 @@ def main():
         else:
             # ==================== AIR CANVAS MODE ====================
             if results.multi_hand_landmarks:
+                right_hand_seen = False
+                left_hand_seen = False
                 for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
-                    # Get handedness (Left or Right)
                     hand_label = handedness.classification[0].label
-                    
-                    # Calculate gesture only for right hand
+
+                    # Compute gesture for this hand
+                    landmark_list = calc_landmark_list(debug_image, hand_landmarks)
+                    pre_processed_landmark_list = pre_process_landmark(landmark_list)
+                    hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                    now = time.time()
+
                     if hand_label == "Right":
-                        landmark_list = calc_landmark_list(debug_image, hand_landmarks)
-                        pre_processed_landmark_list = pre_process_landmark(landmark_list)
-                        hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
-                        
-                        # hand_sign_id: 0=Open, 1=Close, 2=Pointer, 3=OK
-                        now = time.time()
+                        right_hand_seen = True
+
+                        # Right-hand gesture triggers
                         if hand_sign_id == 0 and (now - last_button_time > cooldown_time):  # Open palm = Clear
                             color_points.clear()
                             persistent_canvas.fill(255)
-                            print("Canvas cleared by open palm gesture")
+                            print("Canvas cleared by open palm gesture (Right)")
                             last_button_time = now
                         elif hand_sign_id == 1 and (now - last_button_time > cooldown_time):  # Close palm = Save
                             save_canvas(persistent_canvas)
-                            print("Canvas saved by close palm gesture")
+                            print("Canvas saved by close palm gesture (Right)")
                             last_button_time = now
-                    
-                    # Drawing with index finger (all hands)
-                    index_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
-                    thumb_tip = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP]
-                    x, y = int(index_tip.x * args.width), int(index_tip.y * args.height)
 
-                    smoothed_x = int(prev_x + smoothing * (x - prev_x))
-                    smoothed_y = int(prev_y + smoothing * (y - prev_y))
-                    prev_x, prev_y = smoothed_x, smoothed_y
-                    smoothed = (smoothed_x, smoothed_y)
+                        # Drawing with RIGHT hand index finger only
+                        index_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
+                        thumb_tip = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP]
+                        x, y = int(index_tip.x * args.width), int(index_tip.y * args.height)
 
-                    thumb_x, thumb_y = int(thumb_tip.x * args.width), int(thumb_tip.y * args.height)
-                    pinch_distance = np.hypot(thumb_x - x, thumb_y - y)
-                    drawing_enabled = pinch_distance >= 40
+                        smoothed_x = int(prev_x + smoothing * (x - prev_x))
+                        smoothed_y = int(prev_y + smoothing * (y - prev_y))
+                        prev_x, prev_y = smoothed_x, smoothed_y
+                        smoothed = (smoothed_x, smoothed_y)
 
-                    if smoothed_y < 65:
-                        now = time.time()
-                        if now - last_button_time > cooldown_time:
-                            if 20 <= smoothed_x <= 140:
-                                color_points.clear()
-                                persistent_canvas.fill(255)
-                            elif 160 <= smoothed_x <= 260:
+                        thumb_x, thumb_y = int(thumb_tip.x * args.width), int(thumb_tip.y * args.height)
+                        pinch_distance = np.hypot(thumb_x - x, thumb_y - y)
+                        drawing_enabled = pinch_distance >= 40
+
+                        if smoothed_y < 65:
+                            if now - last_button_time > cooldown_time:
+                                if 20 <= smoothed_x <= 140:
+                                    color_points.clear()
+                                    persistent_canvas.fill(255)
+                                elif 160 <= smoothed_x <= 260:
+                                    new_color = show_color_picker(current_color)
+                                    if new_color:
+                                        current_color = new_color
+                                        # sync preset index to custom color if present
+                                        if current_color in color_cycle:
+                                            color_index = color_cycle.index(current_color)
+                                elif 500 <= smoothed_x <= 620:
+                                    save_canvas(persistent_canvas)
+                                last_button_time = now
+                        elif drawing_enabled:
+                            color_points[current_color].appendleft(smoothed)
+                        else:
+                            color_points[current_color].appendleft(None)
+
+                    elif hand_label == "Left":
+                        left_hand_seen = True
+
+                        # Left-hand tool controls
+                        if now - left_last_action_time > cooldown_time:
+                            if hand_sign_id == 2:  # Pointer → Cycle preset colors
+                                color_index = (color_index + 1) % len(color_cycle)
+                                current_color = color_cycle[color_index]
+                                print(f"Left hand: Color cycled to {current_color}")
+                                left_last_action_time = now
+                            elif hand_sign_id == 3:  # OK → Open color picker
                                 new_color = show_color_picker(current_color)
                                 if new_color:
                                     current_color = new_color
-                            elif 500 <= smoothed_x <= 620:
-                                save_canvas(persistent_canvas)
-                            last_button_time = now
-                    elif drawing_enabled:
-                        color_points[current_color].appendleft(smoothed)
-                    else:
-                        color_points[current_color].appendleft(None)
+                                    if current_color in color_cycle:
+                                        color_index = color_cycle.index(current_color)
+                                print("Left hand: Color picker used")
+                                left_last_action_time = now
+                            elif hand_sign_id == 0:  # Open → Increase brush size
+                                current_brush_size = min(20, current_brush_size + 1)
+                                print(f"Left hand: Brush size increased to {current_brush_size}")
+                                left_last_action_time = now
+                            elif hand_sign_id == 1:  # Close → Decrease brush size
+                                current_brush_size = max(1, current_brush_size - 1)
+                                print(f"Left hand: Brush size decreased to {current_brush_size}")
+                                left_last_action_time = now
+
+                # If no RIGHT hand present in frame, break the stroke
+                if not right_hand_seen:
+                    color_points[current_color].appendleft(None)
             else:
                 color_points[current_color].appendleft(None)
 
@@ -403,32 +450,34 @@ def main():
             # Set display to canvas and draw buttons on top
             debug_image = persistent_canvas.copy()
             if results.multi_hand_landmarks:
+                # Show pointer and gesture info for Right; tool hint for Left
                 for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
                     hand_label = handedness.classification[0].label
-                    index_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
-                    x, y = int(index_tip.x * args.width), int(index_tip.y * args.height)
-                    smoothed_x = int(prev_x + smoothing * (x - prev_x))
-                    smoothed_y = int(prev_y + smoothing * (y - prev_y))
-                    cv.circle(debug_image, (smoothed_x, smoothed_y), 8, (0, 0, 0), -1)
-                    
-                    # Show gesture recognition for right hand
+                    landmark_list = calc_landmark_list(debug_image, hand_landmarks)
+                    pre_processed_landmark_list = pre_process_landmark(landmark_list)
+                    hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                    gesture_text = keypoint_classifier_labels[hand_sign_id]
+
                     if hand_label == "Right":
-                        landmark_list = calc_landmark_list(debug_image, hand_landmarks)
-                        pre_processed_landmark_list = pre_process_landmark(landmark_list)
-                        hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
-                        gesture_text = keypoint_classifier_labels[hand_sign_id]
-                        
-                        # Display current gesture
+                        index_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
+                        x, y = int(index_tip.x * args.width), int(index_tip.y * args.height)
+                        smoothed_x = int(prev_x + smoothing * (x - prev_x))
+                        smoothed_y = int(prev_y + smoothing * (y - prev_y))
+                        cv.circle(debug_image, (smoothed_x, smoothed_y), 8, (0, 0, 0), -1)
+
                         cv.putText(debug_image, f"Right Hand: {gesture_text}", (10, 80),
-                                 cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-                        
-                        # Show action hints
+                                   cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                         if gesture_text == "Open":
                             cv.putText(debug_image, "[OPEN PALM: CLEAR]", (10, 110),
-                                     cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
+                                       cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
                         elif gesture_text == "Close":
                             cv.putText(debug_image, "[CLOSE PALM: SAVE]", (10, 110),
-                                     cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
+                                       cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
+                    else:  # Left
+                        cv.putText(debug_image, f"Left Hand: {gesture_text} [Tools]", (10, 140),
+                                   cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 140, 0), 2)
+                        cv.putText(debug_image, "Pointer: Next Color | OK: Picker | Open: +Size | Close: -Size",
+                                   (10, 170), cv.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
             # Draw buttons AFTER canvas is set
             draw_canvas_buttons(debug_image, current_color, current_brush_size)
 
