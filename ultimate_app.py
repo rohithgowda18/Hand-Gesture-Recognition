@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Multi-mode Hand Gesture Recognition and Air Canvas Application
-Combines gesture recognition with air canvas drawing functionality
+Ultimate Hand Gesture Recognition & Air Canvas Application
+Combines gesture recognition and air canvas drawing in one app
+Switch modes with: 1 for Gesture Recognition, 2 for Air Canvas
 """
 
 import csv
 import copy
 import argparse
 import itertools
-from collections import Counter, deque, defaultdict
 import time
+from collections import Counter, deque, defaultdict
 
 import cv2 as cv
 import numpy as np
@@ -19,7 +20,8 @@ import tkinter as tk
 from tkinter import colorchooser
 
 from utils import CvFpsCalc
-from model import KeyPointClassifier, PointHistoryClassifier
+from model import KeyPointClassifier
+from model import PointHistoryClassifier
 
 
 # ==================== COLOR PICKER ====================
@@ -102,19 +104,144 @@ def pre_process_point_history(image, point_history):
     return temp_point_history
 
 
+def logging_csv(number, mode, landmark_list, point_history_list):
+    if mode == 0:
+        pass
+    if mode == 1 and (0 <= number <= 9):
+        csv_path = 'model/keypoint_classifier/keypoint.csv'
+        with open(csv_path, 'a', newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([number, *landmark_list])
+    if mode == 2 and (0 <= number <= 9):
+        csv_path = 'model/point_history_classifier/point_history.csv'
+        with open(csv_path, 'a', newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([number, *point_history_list])
+    return
+
+
 def draw_landmarks(image, landmark_point):
     if len(landmark_point) > 0:
+        # Thumb
         cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[3]), (0, 0, 0), 6)
         cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[3]), (255, 255, 255), 2)
         cv.line(image, tuple(landmark_point[3]), tuple(landmark_point[4]), (0, 0, 0), 6)
         cv.line(image, tuple(landmark_point[3]), tuple(landmark_point[4]), (255, 255, 255), 2)
-        for index, landmark in enumerate(landmark_point):
-            if index in [0, 1, 4, 8, 12, 16, 20]:
-                cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255), -1)
-                cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
-            else:
-                cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
-                cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+
+        # Index finger
+        cv.line(image, tuple(landmark_point[5]), tuple(landmark_point[6]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[5]), tuple(landmark_point[6]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[6]), tuple(landmark_point[7]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[6]), tuple(landmark_point[7]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[7]), tuple(landmark_point[8]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[7]), tuple(landmark_point[8]), (255, 255, 255), 2)
+
+        # Middle finger
+        cv.line(image, tuple(landmark_point[9]), tuple(landmark_point[10]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[9]), tuple(landmark_point[10]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[10]), tuple(landmark_point[11]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[10]), tuple(landmark_point[11]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[11]), tuple(landmark_point[12]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[11]), tuple(landmark_point[12]), (255, 255, 255), 2)
+
+        # Ring finger
+        cv.line(image, tuple(landmark_point[13]), tuple(landmark_point[14]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[13]), tuple(landmark_point[14]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[14]), tuple(landmark_point[15]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[14]), tuple(landmark_point[15]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[15]), tuple(landmark_point[16]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[15]), tuple(landmark_point[16]), (255, 255, 255), 2)
+
+        # Little finger
+        cv.line(image, tuple(landmark_point[17]), tuple(landmark_point[18]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[17]), tuple(landmark_point[18]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[18]), tuple(landmark_point[19]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[18]), tuple(landmark_point[19]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[19]), tuple(landmark_point[20]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[19]), tuple(landmark_point[20]), (255, 255, 255), 2)
+
+        # Palm
+        cv.line(image, tuple(landmark_point[0]), tuple(landmark_point[1]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[0]), tuple(landmark_point[1]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[1]), tuple(landmark_point[2]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[1]), tuple(landmark_point[2]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[5]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[5]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[5]), tuple(landmark_point[9]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[5]), tuple(landmark_point[9]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[9]), tuple(landmark_point[13]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[9]), tuple(landmark_point[13]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[13]), tuple(landmark_point[17]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[13]), tuple(landmark_point[17]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[17]), tuple(landmark_point[0]), (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[17]), tuple(landmark_point[0]), (255, 255, 255), 2)
+
+    # Key Points
+    for index, landmark in enumerate(landmark_point):
+        if index == 0:  # Wrist 1
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 1:  # Wrist 2
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 2:  # Thumb: Base
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 3:  # Thumb: Joint 1
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 4:  # Thumb: Tip
+            cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
+        if index == 5:  # Index Finger: Base
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 6:  # Index Finger: Joint 2
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 7:  # Index Finger: Joint 1
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 8:  # Index Finger: Tip
+            cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
+        if index == 9:  # Middle Finger: Base
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 10:  # Middle Finger: Joint 2
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 11:  # Middle Finger: Joint 1
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 12:  # Middle Finger: Tip
+            cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
+        if index == 13:  # Ring Finger: Base
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 14:  # Ring Finger: Joint 2
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 15:  # Ring Finger: Joint 1
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 16:  # Ring Finger: Tip
+            cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
+        if index == 17:  # Pinky Finger: Base
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 18:  # Pinky Finger: Joint 2
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 19:  # Pinky Finger: Joint 1
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 20:  # Pinky Finger: Tip
+            cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
+
     return image
 
 
@@ -147,10 +274,9 @@ def draw_point_history(image, point_history):
 
 
 def draw_info(image, fps, mode, number):
-    cv.putText(image, "FPS:" + str(fps), (10, 30), cv.FONT_HERSHEY_SIMPLEX,
-               1.0, (0, 0, 0), 4, cv.LINE_AA)
-    cv.putText(image, "FPS:" + str(fps), (10, 30), cv.FONT_HERSHEY_SIMPLEX,
-               1.0, (255, 255, 255), 2, cv.LINE_AA)
+    cv.putText(image, "FPS:" + str(fps), (10, 30), cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 4, cv.LINE_AA)
+    cv.putText(image, "FPS:" + str(fps), (10, 30), cv.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv.LINE_AA)
+
     mode_string = ['Logging Key Point', 'Logging Point History']
     if 1 <= mode <= 2:
         cv.putText(image, "MODE:" + mode_string[mode - 1], (10, 90),
@@ -177,17 +303,23 @@ def select_mode(key, mode):
 # ==================== AIR CANVAS FUNCTIONS ====================
 def draw_canvas_buttons(img, current_color, current_brush_size):
     """Draw UI buttons for canvas mode"""
+    height = img.shape[0]
+    
+    # CLEAR button - top left
     cv.rectangle(img, (20, 10), (140, 60), (50, 50, 50), -1)
     cv.putText(img, "CLEAR", (40, 45), cv.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
-    cv.rectangle(img, (160, 10), (260, 60), current_color, -1)
+    # COLOR button - top center
+    cv.rectangle(img, (160, 10), (300, 60), current_color, -1)
     text_color = (255, 255, 255) if sum(current_color) < 382 else (0, 0, 0)
-    cv.putText(img, "COLOR", (175, 45), cv.FONT_HERSHEY_SIMPLEX, 0.8, text_color, 2)
+    cv.putText(img, "COLOR", (180, 45), cv.FONT_HERSHEY_SIMPLEX, 0.8, text_color, 2)
 
-    cv.rectangle(img, (500, 10), (620, 60), (100, 100, 100), -1)
-    cv.putText(img, "SAVE", (525, 45), cv.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    # SAVE button - top right
+    cv.rectangle(img, (320, 10), (440, 60), (100, 100, 100), -1)
+    cv.putText(img, "SAVE", (345, 45), cv.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
-    cv.putText(img, f"Size: {current_brush_size}", (280, 50), cv.FONT_HERSHEY_SIMPLEX, 0.7, (50, 50, 50), 2)
+    # Brush size indicator - below buttons
+    cv.putText(img, f"Brush Size: {current_brush_size} (Press +/-)", (20, 90), cv.FONT_HERSHEY_SIMPLEX, 0.7, (50, 50, 50), 2)
 
 
 def save_canvas(persistent_canvas):
@@ -199,10 +331,10 @@ def save_canvas(persistent_canvas):
 
 def draw_mode_info(image, app_mode):
     """Display current mode on the image"""
-    mode_text = "MODE: GESTURE RECOGNITION" if app_mode == "gesture" else "MODE: AIR CANVAS"
-    cv.putText(image, mode_text, (10, image.shape[0] - 20), cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-    cv.putText(image, "Press 'g' for Gesture | 'd' for Draw | 'esc' to exit", (10, image.shape[0] - 50),
-               cv.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+    mode_text = "MODE: GESTURE RECOGNITION (Press 2 for Canvas)" if app_mode == 1 else "MODE: AIR CANVAS (Press 1 for Gesture)"
+    color = (0, 255, 0) if app_mode == 1 else (0, 0, 255)
+    cv.putText(image, mode_text, (10, image.shape[0] - 20), cv.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+    cv.putText(image, "Press 'esc' to exit", (10, image.shape[0] - 50), cv.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
 
 # ==================== MAIN APPLICATION ====================
@@ -247,11 +379,19 @@ def main():
     cooldown_time = 0.5
     prev_x, prev_y = 0, 0
     smoothing = 0.3
-    persistent_canvas = np.zeros((args.height, args.width, 3), dtype=np.uint8)
+    persistent_canvas = np.ones((args.height, args.width, 3), dtype=np.uint8) * 255
 
-    # Application mode
-    app_mode = "gesture"  # "gesture" or "draw"
+    # Application mode: 1 = Gesture Recognition, 2 = Air Canvas
+    app_mode = 1
     use_brect = True
+
+    print("=" * 60)
+    print("ULTIMATE HAND GESTURE & CANVAS APP")
+    print("=" * 60)
+    print("Press '1' for Gesture Recognition Mode")
+    print("Press '2' for Air Canvas Drawing Mode")
+    print("Press 'ESC' to exit")
+    print("=" * 60)
 
     while True:
         fps = cvFpsCalc.get()
@@ -260,11 +400,11 @@ def main():
         # Mode switching
         if key == 27:  # ESC
             break
-        elif key == ord('g'):
-            app_mode = "gesture"
+        elif key == ord('1'):
+            app_mode = 1
             print("Switched to Gesture Recognition Mode")
-        elif key == ord('d'):
-            app_mode = "draw"
+        elif key == ord('2'):
+            app_mode = 2
             print("Switched to Air Canvas Mode")
 
         ret, image = cap.read()
@@ -279,7 +419,7 @@ def main():
         results = hands.process(image_rgb)
         image_rgb.flags.writeable = True
 
-        if app_mode == "gesture":
+        if app_mode == 1:
             # ==================== GESTURE RECOGNITION MODE ====================
             if results.multi_hand_landmarks is not None:
                 for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
@@ -303,6 +443,18 @@ def main():
                     finger_gesture_history.append(finger_gesture_id)
                     most_common_fg_id = Counter(finger_gesture_history).most_common()
 
+                    # Logging for data collection
+                    number = -1
+                    if 48 <= key <= 57:
+                        number = key - 48
+                    if key == 110:
+                        mode = 0
+                    if key == 107:
+                        mode = 1
+                    if key == 104:
+                        mode = 2
+                    logging_csv(number, mode, pre_processed_landmark_list, pre_processed_point_history_list)
+
                     debug_image = draw_bounding_rect(use_brect, debug_image, brect)
                     debug_image = draw_landmarks(debug_image, landmark_list)
                     debug_image = draw_info_text(
@@ -316,19 +468,11 @@ def main():
             debug_image = draw_point_history(debug_image, point_history)
             debug_image = draw_info(debug_image, fps, mode, -1)
 
-            # Handle data collection in gesture mode
-            number = -1
-            if 48 <= key <= 57:
-                number = key - 48
-            if key == 110:
-                mode = 0
-            if key == 107:
-                mode = 1
-            if key == 104:
-                mode = 2
-
         else:
             # ==================== AIR CANVAS MODE ====================
+            temp_canvas = persistent_canvas.copy()
+            draw_canvas_buttons(debug_image, current_color, current_brush_size)
+
             if results.multi_hand_landmarks:
                 for hand_landmarks in results.multi_hand_landmarks:
                     index_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
@@ -340,6 +484,8 @@ def main():
                     prev_x, prev_y = smoothed_x, smoothed_y
                     smoothed = (smoothed_x, smoothed_y)
 
+                    cv.circle(debug_image, smoothed, 8, (0, 0, 0), -1)
+
                     thumb_x, thumb_y = int(thumb_tip.x * args.width), int(thumb_tip.y * args.height)
                     pinch_distance = np.hypot(thumb_x - x, thumb_y - y)
                     drawing_enabled = pinch_distance >= 40
@@ -347,14 +493,16 @@ def main():
                     if smoothed_y < 65:
                         now = time.time()
                         if now - last_button_time > cooldown_time:
-                            if 20 <= smoothed_x <= 140:
+                            if 20 <= smoothed_x <= 140:  # CLEAR
                                 color_points.clear()
                                 persistent_canvas.fill(255)
-                            elif 160 <= smoothed_x <= 260:
+                                print("Canvas cleared!")
+                            elif 160 <= smoothed_x <= 300:  # COLOR
                                 new_color = show_color_picker(current_color)
                                 if new_color:
                                     current_color = new_color
-                            elif 500 <= smoothed_x <= 620:
+                                    print(f"Color changed to RGB: {(new_color[2], new_color[1], new_color[0])}")
+                            elif 320 <= smoothed_x <= 440:  # SAVE
                                 save_canvas(persistent_canvas)
                             last_button_time = now
                     elif drawing_enabled:
@@ -369,33 +517,28 @@ def main():
                 for i in range(1, len(points)):
                     if points[i - 1] is None or points[i] is None:
                         continue
+                    cv.line(debug_image, points[i - 1], points[i], color, current_brush_size)
+                    cv.line(temp_canvas, points[i - 1], points[i], color, current_brush_size)
                     cv.line(persistent_canvas, points[i - 1], points[i], color, current_brush_size)
 
             # Handle canvas keyboard input
             if key == ord('+') or key == ord('='):
                 current_brush_size = min(20, current_brush_size + 1)
+                print(f"Brush size: {current_brush_size}")
             elif key == ord('-'):
                 current_brush_size = max(1, current_brush_size - 1)
+                print(f"Brush size: {current_brush_size}")
 
-            # Set display to canvas and draw buttons on top
-            debug_image = persistent_canvas.copy()
-            if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    index_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
-                    x, y = int(index_tip.x * args.width), int(index_tip.y * args.height)
-                    smoothed_x = int(prev_x + smoothing * (x - prev_x))
-                    smoothed_y = int(prev_y + smoothing * (y - prev_y))
-                    cv.circle(debug_image, (smoothed_x, smoothed_y), 8, (0, 0, 0), -1)
-            # Draw buttons AFTER canvas is set
-            draw_canvas_buttons(debug_image, current_color, current_brush_size)
+            debug_image = temp_canvas
 
         # Display mode info
         draw_mode_info(debug_image, app_mode)
 
-        cv.imshow('Hand Gesture & Canvas Combined', debug_image)
+        cv.imshow('Ultimate Hand Gesture & Canvas App', debug_image)
 
     cap.release()
     cv.destroyAllWindows()
+
 
 if __name__ == '__main__':
     main()
